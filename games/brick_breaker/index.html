@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Brick breaker - Germain PINGANAUD</title>
+    <style media="screen">
+      body {
+        font-family: Arial;
+        background-color: #f1f1f1;
+        width: 100%;
+        height: 800px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+      canvas {
+        border: 20px solid white;
+        border-radius: 10px;
+        box-shadow: 5px 5px 20px grey;
+      }
+      h1 {
+        color: black;
+        font-family: Chalkduster;
+      }
+      a {
+        margin: 0 200px;
+        text-decoration: none;
+        color: black;
+      }
+      a:hover {
+        color: blue;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <a href="https://germainpinganaud.fr/">Back to my portfolio</a>
+      <a href="https://germainpinganaud.fr/pong">Try my Pong</a>
+    </div>
+    <h1>Brick breaker</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+
+    /*---------------
+    | Sommaire       |
+    |----------------|
+    | SETTINGS       |    Brick breaker game V1.3
+    | INPUT / OUTPUT |    Développé par Germain PINGANAUD
+    | STATES         |    en suivant le tutoriel :
+    | PHYSICS        |    "Hands on intro to game programming"
+    | GRAPHICS       |    Original sounds created with Tone Generator Software
+     ---------------*/
+
+    //////////////////////////////// SETTINGS  /////////////////////////////////
+
+    const BALL_RADIUS = 5;
+    const BALL_SPEED_Y = -8;
+    const BALL_SPEED_X = 3;
+    const PADDLE_M = 50;
+    const PADDLE_W = 100;
+    const PADDLE_H = 10;
+    const BRICK_W = 80;
+    const BRICK_H = 20;
+    const BRICK_GAP = 0;
+    const BRICK_COLS = 10;
+    const BRICK_ROWS = 10;
+    const BRICKS_MARGIN_LEFT = 0;
+    const BRICKS_MARGIN_TOP = 6;
+
+    const DEBUG_MODE = false;
+
+    var borderThickness = 20;
+    var canvas;
+    var canvasContext;
+
+    var ballSpawnX;
+    var ballSpawnY;
+    var ballX;
+    var ballY;
+    var ballSpeedX = BALL_SPEED_X;
+    var ballSpeedY = BALL_SPEED_Y;
+
+    var paddleX;
+    var paddleY;
+
+    var brickState = new Array(BRICK_COLS * BRICK_ROWS);
+    var brickIndex;
+    var col;
+    var row;
+    var gameIsPaused = false;
+
+    var startSound = new Audio("../_sounds/launch.wav");
+    var bounceSound = new Audio("../_sounds/tic.wav");
+    var pointSound = new Audio("../_sounds/kling.wav");
+    var dropSound = new Audio("../_sounds/drop.wav");
+
+    ///////////////////////////// INPUT / OUTPUT  //////////////////////////////
+    window.onload = function() {
+        canvas = document.getElementById('gameCanvas');
+        canvasContext = canvas.getContext('2d');
+        paddleX = canvas.width/2 - PADDLE_W/2;
+        paddleY = canvas.height - PADDLE_M - PADDLE_H;
+        ballSpawnX = canvas.width/2;
+        ballSpawnY = canvas.height - PADDLE_M - PADDLE_H - BALL_RADIUS;
+        ballX = ballSpawnX;
+        ballY = ballSpawnY;
+
+        var framePerSecond = 30;
+
+        resetBricks();
+
+
+        setInterval(function() {
+            if (gameIsPaused == false) {
+                drawEverything();
+                moveEverything();
+            }
+        }, 1000/framePerSecond);
+
+        canvas.addEventListener('mousemove', function(mouseMoves) {
+            var mousePos = calculateMousePos(mouseMoves);
+            paddleX = mousePos.x - (PADDLE_W/2);
+        });
+        canvas.addEventListener('click', function(evt) {
+          if (gameIsPaused == true) {
+            gameIsPaused = false;
+            resetBall();
+            resetBricks();
+          }
+        });
+    };
+
+    function calculateMousePos(mouseMoves) {
+        var rect = canvas.getBoundingClientRect();
+        var root = document.documentElement;
+        var mouseX = mouseMoves.clientX - rect.left - root.scrollLeft - borderThickness;
+        var mouseY = mouseMoves.clientY - rect.top - root.scrollTop - borderThickness;
+        return {
+            x: mouseX,
+            y: mouseY
+        };
+    };
+
+    ////////////////////////////////// STATES  /////////////////////////////////
+
+    function victory() {
+      setTimeout(function(){
+          pauseGame();
+          canvasContext.fillStyle = 'white';
+          canvasContext.font = '80px Chalkduster';
+          canvasContext.textAlign = 'center';
+          canvasContext.fillText('Victory !', canvas.width/2, canvas.height/2);
+      }, 200);
+    }
+
+    function defeat() {
+        dropSound.play();
+        setTimeout(function(){
+            pauseGame();
+            canvasContext.fillStyle = 'white';
+            canvasContext.font = '50px Chalkduster';
+            canvasContext.textAlign = 'center';
+            canvasContext.fillText('Oups...', canvas.width/2, canvas.height/2);
+
+            canvasContext.fillStyle = 'white';
+            canvasContext.font = '20px Chalkduster';
+            canvasContext.textAlign = 'center';
+            canvasContext.fillText('Click to try again', (canvas.width/4)*3, (canvas.height/4)*3);
+        }, 200);
+    };
+
+    function pauseGame() {
+        gameIsPaused = true;
+    };
+
+    function resetBall() {
+      startSound.play();
+      ballX = ballSpawnX;
+      ballY = ballSpawnY;
+      ballSpeedX = BALL_SPEED_X;
+      ballSpeedY = BALL_SPEED_Y;
+    };
+
+    function resetBricks() {
+        for (var i = BRICK_COLS * BRICKS_MARGIN_TOP; i < BRICK_COLS * BRICK_ROWS; i++) {
+          brickState[i] = 2;
+        }
+    };
+
+    function randomBricks() {
+        for(var i=0; i<BRICK_COLS * BRICK_ROWS; i++) {
+            if(Math.random() < 0.5) { // only fill in half the bricks, to test display
+                brickState[i] = 1;
+            } else {
+                brickState[i] = 0;
+            }
+        }
+    }
+
+    function getBrickState(col, row) {
+        brickIndex = getBrickIndex(col, row);
+        if (brickState[brickIndex] > 0) {
+            return brickState[brickIndex];
+        }
+    }
+
+    function getBrickIndex(col, row) {
+        return (col + BRICK_COLS*row);
+    }
+
+    function hitBrick(x, y) {
+        col = Math.floor(x / BRICK_W);
+        row = Math.floor(y / BRICK_H);
+        if(col < 0 || col >= BRICK_COLS ||
+           row < 0 || row >= BRICK_ROWS) {
+            return false;
+        }
+        brickIndex = getBrickIndex(col, row);
+        prevCol = Math.floor((x-ballSpeedX) / BRICK_W);
+        prevRow = Math.floor((y-ballSpeedY) / BRICK_H);
+
+        if (brickState[brickIndex] > 0) {
+            if (col != prevCol) {
+                bounce('x');
+              }
+            if (row != prevRow) {
+                bounce('y');
+            }
+            brickState[brickIndex] -= 1;
+            if (countBricks() == 0) {
+              victory();
+            };
+        }
+    };
+
+    function countBricks() {
+        var brickCount = 0;
+        for (var eachCol = 0; eachCol < BRICK_COLS; eachCol ++) {
+            for (var eachRow = 0; eachRow < BRICK_ROWS; eachRow ++) {
+              var state = getBrickState(eachCol, eachRow);
+                if (state > 0) {
+                    brickCount += 1;
+                }
+            }
+        }
+        if (DEBUG_MODE == true) {
+            console.log('number of lasting bricks : ' + brickCount);
+        }
+        return brickCount;
+    }
+
+    function getGrid(x, y) {
+        col = Math.floor(x / BRICK_W);
+        row = Math.floor(y / BRICK_H);
+        if(col < 0 || col >= BRICK_COLS ||
+          row < 0 || row >= BRICK_ROWS) {
+            return false;
+          }
+        return {col,row};
+    };
+
+    ///////////////////////////////// PHYSICS  /////////////////////////////////
+
+    function bounce(axis) {
+      if (axis == 'x') {
+        ballSpeedX *= -1;
+      }
+      if (axis == 'y') {
+        ballSpeedY *= -1;
+      }
+      bounceSound.play();
+    };
+
+    function moveBall() {
+      ballX += ballSpeedX;
+      ballY += ballSpeedY;
+      hitBrick(ballX, ballY);
+    };
+
+    function moveEverything() {
+        moveBall();
+
+        // left/right bounce
+        if (ballX > canvas.width || ballX < 0) {
+            bounce ('x');
+        }
+
+        // top bounce
+        if (ballY < 0) {
+            bounce ('y');
+        }
+
+        // bar bounce
+        // reach paddle's height
+        if (ballY > paddleY - BALL_RADIUS && ballY < paddleY + BALL_RADIUS) {
+            // front off the paddle
+            if (ballX > paddleX && ballX < paddleX + PADDLE_W) {
+                ballSpeedX += (ballX - paddleX - (PADDLE_W/2)) / 10;
+                bounce ('y');
+            }
+        }
+
+        // bottom drop
+        if (ballY > canvas.height + BALL_RADIUS) {
+          defeat();
+        }
+
+        // bar side bounce
+        // ball and bar are on the same height
+        if (ballY > paddleY + BALL_RADIUS && ballY < paddleY + BALL_RADIUS + PADDLE_H) {
+            // ball reaches the bar
+            if (ballX > paddleX && ballX < paddleX + PADDLE_W) {
+                // ball reaches the left edge of the bar
+                if (ballX > paddleX && ballX < paddleX + PADDLE_W/2) {
+                    // push it left
+                    ballX = paddleX - BALL_RADIUS;
+                    // make sure ball keeps going left
+                    if (ballSpeedX > 0) {
+                        bounce ('x');
+                    }
+                }
+                // ball reaches the right edge of the bar
+                if (ballX < paddleX + PADDLE_W && ballX > paddleX + PADDLE_W/2) {
+                    // push it right
+                    ballX = paddleX + PADDLE_W + BALL_RADIUS;
+                    // make sure ball keeps going right
+                    if (ballSpeedX < 0) {
+                        bounce ('x');
+                    }
+                }
+            }
+        }
+    };
+
+    ///////////////////////////////// GRAPHICS  ////////////////////////////////
+
+    function drawEverything() {
+        drawCanvas();
+        drawBricks();
+        drawPaddle();
+        drawBall();
+    };
+
+    function drawCanvas() {
+        canvasContext.fillStyle = '#0c1223';
+        canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    function drawBall() {
+        canvasContext.fillStyle = 'white';
+        canvasContext.beginPath();
+        canvasContext.arc(ballX, ballY, BALL_RADIUS, 0, Math.PI*2, true);
+        canvasContext.fill();
+    };
+
+    function drawPaddle() {
+        canvasContext.fillStyle = 'white';
+        canvasContext.fillRect(paddleX, paddleY, PADDLE_W, PADDLE_H);
+    };
+
+    function drawBricks() {
+        for (var eachCol = 0; eachCol < BRICK_COLS; eachCol ++) {
+            for (var eachRow = 0; eachRow < BRICK_ROWS; eachRow ++) {
+              var state = getBrickState(eachCol, eachRow);
+                if (state > 0) {
+                    var x = eachCol * BRICK_W;
+                    var y = eachRow * BRICK_H;
+                    drawOneBrick(x, y, state);
+                }
+            }
+        }
+      };
+
+    function drawOneBrick(x, y, state) {
+        if (state == 2) {
+            canvasContext.fillStyle = '#a87d57';
+        }
+        if (state == 1) {
+            canvasContext.fillStyle = '#4f3c46';
+        }
+        canvasContext.fillRect(x, y, BRICK_W - BRICK_GAP, BRICK_H - BRICK_GAP);
+        if (DEBUG_MODE == true) {
+            writeBrickIndex(x, y);
+        }
+    };
+
+    function writeBrickIndex(x, y) {
+      canvasContext.fillStyle = 'black';
+      canvasContext.font = '15px Andale Mono';
+      canvasContext.textAlign = 'left';
+      brickIndex = getBrickIndex(getGrid(x, y).col, getGrid(x, y).row);
+      canvasContext.fillText(brickIndex, x+BRICK_W/4, y+BRICK_H/1.5);
+    }
+
+    </script>
+  </body>
+</html>

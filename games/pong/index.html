@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Pong - Germain PINGANAUD</title>
+    <style media="screen">
+    body {
+      font-family: Arial;
+      background-color: #f1f1f1;
+      width: 100%;
+      height: 800px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    canvas {
+      border: 20px solid white;
+      border-radius: 10px;
+      box-shadow: 5px 5px 20px grey;
+    }
+    h1 {
+      color: black;
+      font-family: Chalkduster;
+    }
+    a {
+      margin: 0 200px;
+      text-decoration: none;
+      color: black;
+    }
+    a:hover {
+      color: blue;
+    }
+    </style>
+  </head>
+  <body>
+    <div>
+      <a href="https://germainpinganaud.fr/">Back to my portfolio</a>
+      <a href="https://germainpinganaud.fr/brick_breaker">Try my Brick breaker</a>
+    </div><h1>Pong</h1><i class="fas fa-info"></i>
+    <div>
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+    </div>
+  <script>
+
+    /*---------------
+    | Sommaire       |
+    |----------------|
+    | SETTINGS       |    Pong game V1.1
+    | INPUT / OUTPUT |    Développé par Germain PINGANAUD
+    | STATES         |    en suivant le tutoriel :
+    | PHYSICS        |    "Hands on intro to game programming"
+    | GRAPHICS       |    Original sounds created with Tone Generator Software
+     ---------------*/
+
+    //////////////////////////////// SETTINGS  /////////////////////////////////
+
+
+
+    const PADDLE_HEIGHT = 100;
+    const PADDLE_THICKNESS = 10;
+    const BALL_SPEED = 3;
+    const BALL_SPEED_INCREASE = 1.05;
+    const BALL_RADIUS = 7;
+    const CPU_SPEED = 5;
+    const POINTS_PER_ROUND = 5;
+
+    var canvas;
+    var canvasContext;
+
+    var ballSpeedX = BALL_SPEED;
+    var ballSpeedY = BALL_SPEED/4;
+
+    var paddle1Top = 250;
+    var paddle2Top = 250;
+
+    var ballX = PADDLE_THICKNESS + BALL_RADIUS;
+    var ballY = paddle1Top + PADDLE_HEIGHT/2;
+
+    var scoreP1 = 0;
+    var scoreP2 = 0;
+    var gameIsPaused = false;
+
+    var startSound = new Audio("../_sounds/launch.wav");
+    var bounceSound = new Audio("../_sounds/tic.wav");
+    var pointSound = new Audio("../_sounds/point.wav");
+    var dropSound = new Audio("../_sounds/drop.wav");
+
+
+
+    ///////////////////////////// INPUT / OUTPUT  //////////////////////////////
+
+
+
+    window.onload = function() {
+      // Canvas
+      canvas = document.getElementById('game-canvas');
+      canvasContext = canvas.getContext('2d');
+
+      var framePerSecond = 100;
+      setInterval(function()
+      {
+        if (gameIsPaused == false) {
+          drawEverything();
+          moveEverything();
+        }
+      }, 1000/framePerSecond);
+
+      canvas.addEventListener('mousemove', function(evt) {
+        var mousePos = calculateMousePos(evt);
+        paddle1Top = mousePos.y - (PADDLE_HEIGHT/2);
+      });
+
+      // Restart
+      canvas.addEventListener('click', function(evt) {
+        if (gameIsPaused == true) {
+          startSound.play();
+          gameIsPaused = false;
+        }
+      });
+
+      initializeGame ();
+    }
+
+    function calculateMousePos(evt) {
+      var rect = canvas.getBoundingClientRect(), root = document.documentElement;
+      // account for the margins, canvas position on page, scroll amount, etc.
+      var mouseX = evt.clientX - rect.left - root.scrollLeft;
+      var mouseY = evt.clientY - rect.top - root.scrollTop;
+      return {
+        x: mouseX,
+        y: mouseY
+      };
+    }
+
+
+
+    ////////////////////////////////// STATES  /////////////////////////////////
+
+
+
+    function initializeGame () {
+      drawEverything();
+      pauseGame();
+    }
+
+    function scorePoint(player) {
+        if (player == 1) {
+        scoreP1 += 1;
+        resetBall();
+        pointSound.play();
+      } else {
+        scoreP2 += 1;
+        resetBall();
+        dropSound.play();
+      }
+      if (scoreP1 >= POINTS_PER_ROUND || scoreP2 >= POINTS_PER_ROUND){
+        if (scoreP1 >= POINTS_PER_ROUND){
+          var endMessage = 'You won !';
+        }
+        if (scoreP2 >= POINTS_PER_ROUND){
+          var endMessage = 'You lost...';
+        }
+        setEndScreen(endMessage);
+      }
+    }
+
+    function setEndScreen(endMessage) {
+      pauseGame();
+      writeText(endMessage, 2, 4, '40px');
+      resetScores();
+    }
+
+    function pauseGame() {
+      gameIsPaused = true;
+      writeText ('click to play', 6, 6);
+    }
+
+    function resetScores() {
+      scoreP1 = 0, scoreP2 = 0;
+    }
+
+
+
+    ///////////////////////////////// PHYSICS  /////////////////////////////////
+
+
+
+    function moveEverything() {
+      // Defining paddles bot
+      paddle1Bot = paddle1Top + PADDLE_HEIGHT;
+      paddle2Bot = paddle2Top + PADDLE_HEIGHT;
+      ballSpeedS = ballSpeedX + ballSpeedY;
+      // Right edge (X est positif)
+      if (ballX > canvas.width) {
+        if (ballY > paddle2Top && ballY < paddle2Bot) {
+          ballSpeedX *= - BALL_SPEED_INCREASE;
+          ballSpeedY += (ballY - (paddle2Top + (PADDLE_HEIGHT/2)))/10;
+          bounceSound.play();
+        } else {
+          scorePoint(1);
+        }
+      }
+
+      // Left edge
+      if (ballX < 0 ) {
+        if (ballY > paddle1Top && ballY < paddle1Bot) {
+          ballSpeedX *= -BALL_SPEED_INCREASE;
+          ballSpeedY += (ballY - (paddle1Top + (PADDLE_HEIGHT/2)))/10;
+          bounceSound.play();
+        } else {
+          scorePoint(2);
+        }
+      }
+
+      // Bounce top or bot
+      if (ballY > canvas.height || ballY < 0 ) {
+        ballSpeedY *= -1;
+        bounceSound.play();
+      }
+
+      // New position
+      ballX += ballSpeedX;
+      ballY += ballSpeedY;
+      moveComputerPaddle();
+    }
+
+    function moveComputerPaddle() {
+      paddle2Bot = paddle2Top + PADDLE_HEIGHT;
+
+      // Ball goes away
+      if (ballSpeedX < 0 || ballX < canvas.width/2) {
+        // Move to center
+        if (paddle2Top + (PADDLE_HEIGHT/2) < canvas.height/2) {
+          paddle2Top += CPU_SPEED;
+        }
+        if (paddle2Bot - (PADDLE_HEIGHT/2) > canvas.height/2  ) {
+          paddle2Top -= CPU_SPEED;
+        }
+      }
+
+      // Ball get close
+      if (ballSpeedX > 0 && ballX > canvas.width/2) {
+        // Move towards ball
+        if (paddle2Top + (PADDLE_HEIGHT/6) < ballY) {
+          paddle2Top += CPU_SPEED;
+        }
+        if (paddle2Bot - (PADDLE_HEIGHT/6) > ballY) {
+          paddle2Top -= CPU_SPEED;
+        }
+      }
+    }
+
+    function resetBall() {
+      ballX = PADDLE_THICKNESS + BALL_RADIUS;
+      ballY = paddle1Top + PADDLE_HEIGHT/2;
+      ballSpeedX = BALL_SPEED;
+      ballSpeedY = BALL_SPEED/4;
+    }
+
+
+
+    ///////////////////////////////// GRAPHICS  ////////////////////////////////
+
+
+
+    function drawEverything() {
+      colorRect(0, 0, canvas.width, canvas.height, '#64AB19');
+      colorNet();
+      colorRect(0, paddle1Top, PADDLE_THICKNESS, PADDLE_HEIGHT, 'white');
+      colorRect(canvas.width - PADDLE_THICKNESS, paddle2Top, PADDLE_THICKNESS, PADDLE_HEIGHT, 'white');
+      colorCircle(ballX, ballY, 7, 'white');
+      writeText ();
+    }
+
+    // Rectangle
+    function colorRect(topLeftX, topLeftY, boxWidth, boxHeight, fillColor) {
+      canvasContext.fillStyle = fillColor;
+      canvasContext.fillRect(topLeftX,topLeftY, boxWidth, boxHeight, fillColor);
+    }
+
+    // Circle
+    function colorCircle(centerX, centerY, radius, fillColor) {
+      canvasContext.fillStyle = fillColor;
+      canvasContext.beginPath();
+      canvasContext.arc(centerX, centerY, radius, 0, Math.PI*2, true);
+      canvasContext.fill();
+    }
+
+    // Net
+    function colorNet(dot) {
+      if (gameIsPaused == true) {
+        return;
+      }
+      for (N = 0; N < canvas.height/40; N ++) {
+        X = N * 40;
+        colorRect(canvas.width/2, X, 3, 20, 'white');
+      };
+    }
+
+    // Scores
+    function writeText(
+      textMessage = scoreP1 + '          ' + scoreP2,
+      textX = 4,
+      textY = 1,
+      fontSize = '20px',
+      fontStyle = 'Chalkduster') {
+      textX = textX * canvas.width/8;
+      textY = textY * canvas.height/8;
+      canvasContext.font = fontSize + ' ' + fontStyle;
+      canvasContext.textAlign = 'center';
+      canvasContext.fillText(textMessage, textX, textY);
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    </script>
+  </body>
+</html>

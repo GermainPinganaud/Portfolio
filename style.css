@@ -10,7 +10,8 @@ a {
 li {
   list-style: circle;
 }
-.page__container {
+figcaption{
+  text-align:center;
 }
 .section--colored {
   background-color: #924040;
@@ -30,4 +31,13 @@ h1, h2 {
 /* Section */
 section {
   padding: 1em;
+}
+.realisation__container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+}
+.realisation__img {
+  width: 200px;
+  height: auto;
 }
